@@ -1,0 +1,25 @@
+{
+  "desc": "0.1.0",
+  "plugins": [
+    {
+      "name": "网易音乐",
+      "url": "https://www.imwzh.com/musicfree/网易音乐_250913.js",
+      "version": "2025.09.14"
+    },
+    {
+      "name": "腾讯音乐",
+      "url": "https://www.imwzh.com/musicfree/腾讯音乐_250913.js",
+      "version": "2025.09.13"
+    },
+    {
+      "name": "酷狗音乐",
+      "url": "https://www.imwzh.com/musicfree/元力kg1.1.0.js",
+      "version": "1.1.0"
+    },
+    {
+      "name": "哔哩",
+      "url": "https://www.imwzh.com/musicfree/哔哩_1.0.2_Teyond.js",
+      "version": "1.0.2"
+    }
+  ]
+}
