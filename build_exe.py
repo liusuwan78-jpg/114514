@@ -305,8 +305,6 @@ def main():
         "--hidden-import", "idna",
         "--hidden-import", "urllib3",
         "--hidden-import", "requests",
-        "--collect-all", "colorama",
-        "--collect-all", "Crypto",
         script,
     ]
     env = os.environ.copy()
