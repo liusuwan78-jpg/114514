@@ -7,9 +7,6 @@ echo   Supports Windows 7 ~ 11, portable for USB drive
 echo ============================================================
 echo.
 
-set "LOG=%~dp0build.log"
-echo Build started at %date% %time% > "%LOG%"
-
 REM ---- Auto-detect Python ----
 set "PYTHON_CMD="
 
@@ -29,7 +26,6 @@ if %errorlevel%==0 (
     goto found
 )
 
-REM Try common install paths
 if exist "C:\Python38\python.exe" (
     set "PYTHON_CMD=C:\Python38\python.exe"
     echo   Found: C:\Python38\python.exe
@@ -58,24 +54,22 @@ echo Please install Python first (recommend 3.8 for Win7~Win11):
 echo   Download: https://www.python.org/downloads/
 echo   IMPORTANT: Check "Add Python to PATH" during install.
 echo.
-echo Python not found >> "%LOG%"
 pause
 exit /b 1
 
 :found
 echo.
 %PYTHON_CMD% --version
-%PYTHON_CMD% --version >> "%LOG%" 2>&1
 echo.
 
 REM ---- Install dependencies ----
 echo [Step 2/4] Installing dependencies...
 echo This may take 1-2 minutes, please wait...
-%PYTHON_CMD% -m pip install -r requirements.txt >> "%LOG%" 2>&1
+%PYTHON_CMD% -m pip install -r requirements.txt
 if %errorlevel% neq 0 (
     echo.
     echo [ERROR] Failed to install dependencies.
-    echo Please check build.log for details, and make sure network is available.
+    echo Please check network connection and try again.
     echo.
     pause
     exit /b 1
@@ -100,10 +94,7 @@ if %BUILD_RESULT%==0 (
     echo ============================================================
 ) else (
     echo [ERROR] Build failed. Error code: %BUILD_RESULT%
-    echo Please check build.log for details.
 )
 
-echo.
-echo Build log saved to: %LOG%
 echo.
 pause
