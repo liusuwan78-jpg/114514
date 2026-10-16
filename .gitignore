@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+dist/
+build/
+*.spec
+
+# ffmpeg binary (downloaded during build)
+ffmpeg
+ffmpeg.exe
+
+# 下载的音乐
+音乐/
+music/
+downloads/
+*.mp3
+*.m4a
+*.flac
+
+# 系统
+.DS_Store
+Thumbs.db
