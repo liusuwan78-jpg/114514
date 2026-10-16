@@ -1,69 +1,83 @@
 @echo off
-chcp 65001 >nul 2>&1
-title ç½‘æ˜“äº‘éŸ³ä¹ä¸‹è½½å™¨ - æ‰“åŒ…å·¥å…·
+title ÍøÒ×ÔÆÒôÀÖÏÂÔØÆ÷ - ´ò°ü¹¤¾ß
 
 echo ============================================================
-echo   ç½‘æ˜“äº‘éŸ³ä¹ä¸‹è½½å™¨ - EXE æ‰“åŒ…å·¥å…·
-echo   æ”¯æŒ Windows 7 ~ 11ï¼Œæ‰“åŒ…åŽå¯æ‹·å…¥ U ç›˜ç›´æŽ¥ä½¿ç”¨
+echo   ÍøÒ×ÔÆÒôÀÖÏÂÔØÆ÷ - EXE ´ò°ü¹¤¾ß
+echo   Ö§³Ö Windows 7 ~ 11£¬´ò°üºó¿É¿½Èë U ÅÌÖ±½ÓÊ¹ÓÃ
 echo ============================================================
 echo.
 
-REM ---- è‡ªåŠ¨æŸ¥æ‰¾ Python ----
+REM ---- ×Ô¶¯²éÕÒ Python ----
 set "PYTHON_CMD="
+
+echo [1/3] ÕýÔÚ²éÕÒ Python...
 
 where python >nul 2>&1
 if %errorlevel%==0 (
     set "PYTHON_CMD=python"
-    goto :found
+    echo   ÕÒµ½: python
+    goto found
 )
 
 where py >nul 2>&1
 if %errorlevel%==0 (
     set "PYTHON_CMD=py -3"
-    goto :found
+    echo   ÕÒµ½: py -3
+    goto found
 )
 
-REM å°è¯•å¸¸è§å®‰è£…è·¯å¾„
-if exist "C:\Python38\python.exe" set "PYTHON_CMD=C:\Python38\python.exe"
-if exist "C:\Python39\python.exe" set "PYTHON_CMD=C:\Python39\python.exe"
-if exist "C:\Python310\python.exe" set "PYTHON_CMD=C:\Python310\python.exe"
-if exist "C:\Python311\python.exe" set "PYTHON_CMD=C:\Python311\python.exe"
-if exist "%LOCALAPPDATA%\Programs\Python\Python38\python.exe" set "PYTHON_CMD=%LOCALAPPDATA%\Programs\Python\Python38\python.exe"
-if exist "%LOCALAPPDATA%\Programs\Python\Python39\python.exe" set "PYTHON_CMD=%LOCALAPPDATA%\Programs\Python\Python39\python.exe"
-if exist "%LOCALAPPDATA%\Programs\Python\Python310\python.exe" set "PYTHON_CMD=%LOCALAPPDATA%\Programs\Python\Python310\python.exe"
-if exist "%LOCALAPPDATA%\Programs\Python\Python311\python.exe" set "PYTHON_CMD=%LOCALAPPDATA%\Programs\Python\Python311\python.exe"
-
-if "%PYTHON_CMD%"=="" (
-    echo.
-    echo [é”™è¯¯] æœªæ£€æµ‹åˆ° Pythonï¼
-    echo.
-    echo è¯·å…ˆå®‰è£… Pythonï¼ˆæŽ¨è 3.8ï¼Œå¯å…¼å®¹ Win7~Win11ï¼‰ï¼š
-    echo   ä¸‹è½½åœ°å€: https://www.python.org/downloads/
-    echo   å®‰è£…æ—¶åŠ¡å¿…å‹¾é€‰ "Add Python to PATH"
-    echo.
-    pause
-    exit /b 1
+if exist "C:\Python38\python.exe" (
+    set "PYTHON_CMD=C:\Python38\python.exe"
+    echo   ÕÒµ½: C:\Python38\python.exe
+    goto found
 )
+if exist "C:\Python39\python.exe" (
+    set "PYTHON_CMD=C:\Python39\python.exe"
+    echo   ÕÒµ½: C:\Python39\python.exe
+    goto found
+)
+if exist "C:\Python310\python.exe" (
+    set "PYTHON_CMD=C:\Python310\python.exe"
+    echo   ÕÒµ½: C:\Python310\python.exe
+    goto found
+)
+if exist "C:\Python311\python.exe" (
+    set "PYTHON_CMD=C:\Python311\python.exe"
+    echo   ÕÒµ½: C:\Python311\python.exe
+    goto found
+)
+
+echo.
+echo [´íÎó] Î´¼ì²âµ½ Python£¡
+echo.
+echo ÇëÏÈ°²×° Python£¨ÍÆ¼ö 3.8£¬¿É¼æÈÝ Win7~Win11£©£º
+echo   ÏÂÔØµØÖ·: https://www.python.org/downloads/
+echo   °²×°Ê±Îñ±Ø¹´Ñ¡ "Add Python to PATH"
+echo.
+pause
+exit /b 1
 
 :found
-echo [1/3] æ£€æµ‹åˆ° Python: %PYTHON_CMD%
+echo.
 %PYTHON_CMD% --version
 echo.
 
-REM ---- å®‰è£…ä¾èµ– ----
-echo [2/3] å®‰è£…ä¾èµ–åŒ…...
+REM ---- °²×°ÒÀÀµ ----
+echo [2/3] °²×°ÒÀÀµ°ü...
+echo ¿ÉÄÜÐèÒª 1-2 ·ÖÖÓ£¬ÇëÄÍÐÄµÈ´ý...
 %PYTHON_CMD% -m pip install -r requirements.txt
 if %errorlevel% neq 0 (
     echo.
-    echo [é”™è¯¯] ä¾èµ–å®‰è£…å¤±è´¥ï¼Œè¯·æ£€æŸ¥ç½‘ç»œè¿žæŽ¥
+    echo [´íÎó] ÒÀÀµ°²×°Ê§°Ü£¬Çë¼ì²éÍøÂçÁ¬½Ó
     echo.
     pause
     exit /b 1
 )
+echo   ÒÀÀµ°²×°Íê³É¡£
 echo.
 
-REM ---- æ‰§è¡Œæ‰“åŒ… ----
-echo [3/3] å¼€å§‹æ‰“åŒ…ï¼ˆçº¦éœ€ 2-5 åˆ†é’Ÿï¼Œè¯·è€å¿ƒç­‰å¾…ï¼‰...
+REM ---- Ö´ÐÐ´ò°ü ----
+echo [3/3] ¿ªÊ¼´ò°ü£¨Ô¼Ðè 2-5 ·ÖÖÓ£¬ÇëÄÍÐÄµÈ´ý£©...
 echo.
 %PYTHON_CMD% build_exe.py
 set "BUILD_RESULT=%errorlevel%"
@@ -71,11 +85,11 @@ set "BUILD_RESULT=%errorlevel%"
 echo.
 if %BUILD_RESULT%==0 (
     echo ============================================================
-    echo   æ‰“åŒ…æˆåŠŸï¼exe æ–‡ä»¶åœ¨ dist æ–‡ä»¶å¤¹ä¸­
-    echo   å¯ç›´æŽ¥æ‹·å…¥ U ç›˜ï¼Œåœ¨ä»»æ„ Windows ç”µè„‘ä¸Šè¿è¡Œ
+    echo   ´ò°ü³É¹¦£¡exe ÎÄ¼þÔÚ dist ÎÄ¼þ¼ÐÖÐ
+    echo   ¿ÉÖ±½Ó¿½Èë U ÅÌ£¬ÔÚÈÎÒâ Windows µçÄÔÉÏÔËÐÐ
     echo ============================================================
 ) else (
-    echo [é”™è¯¯] æ‰“åŒ…å¤±è´¥ï¼Œé”™è¯¯ä»£ç : %BUILD_RESULT%
+    echo [´íÎó] ´ò°üÊ§°Ü£¬´íÎó´úÂë: %BUILD_RESULT%
 )
 
 echo.

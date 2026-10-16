@@ -86,8 +86,11 @@ def _pause_now() -> None:
     try:
         if sys.stdout is None or sys.stdin is None:
             return
-        if hasattr(sys.stdout, "isatty") and not sys.stdout.isatty():
-            return
+        # 打包后的 exe 双击运行时，强制暂停（不依赖 isatty 判断）
+        is_frozen = getattr(sys, "frozen", False)
+        if not is_frozen:
+            if hasattr(sys.stdout, "isatty") and not sys.stdout.isatty():
+                return
         try:
             import msvcrt
             print("\n按任意键继续...", end="", flush=True)
@@ -929,16 +932,16 @@ if __name__ == "__main__":
         main()
     except KeyboardInterrupt:
         print("\n\n已中断，再见！")
-        sys.exit(0)
     except BrokenPipeError:
-        sys.exit(0)
+        pass
     except SystemExit:
-        raise
+        pass
     except Exception as e:
         text = "".join(traceback.format_exception(*sys.exc_info()))
         sys.stderr.write(f"\n[致命错误] {e}\n{text}")
         sys.stderr.flush()
         _log_error_to_file(text.rstrip("\n"))
         print("\n错误日志已保存到 netease_downloader_error.log（exe 同目录）", file=sys.stderr)
-        sys.exit(1)
+    # 显式暂停 + atexit 双保险，防止双击闪退
+    _pause_now()
 
