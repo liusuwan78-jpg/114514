@@ -10,8 +10,10 @@
 """
 
 import argparse
+import atexit
 import base64
 import datetime
+import io
 import json
 import os
 import random
@@ -25,13 +27,105 @@ import traceback
 from typing import Optional, Union
 
 
+# ============ 资源路径（必须先于第三方 import，Win7 兼容 PyInstaller 解压） ============
+def _runtime_tmpdir() -> str:
+    """PyInstaller 解压目录：优先 exe 所在目录的 .pyi_tmp，避开受限的 %TEMP%"""
+    if os.name != "nt":
+        return tempfile.gettempdir()
+    exe_dir = os.path.dirname(os.path.abspath(sys.executable))
+    custom = os.path.join(exe_dir, ".pyi_tmp")
+    try:
+        os.makedirs(custom, exist_ok=True)
+        if os.access(custom, os.W_OK):
+            os.environ.setdefault("_MEIPASS2", custom)
+            return custom
+    except Exception:
+        pass
+    return tempfile.gettempdir()
+
+
+def resource_path(relative: str) -> str:
+    """获取资源文件路径：PyInstaller 打包后从 _MEIPASS 取，否则从源码目录取"""
+    if hasattr(sys, "_MEIPASS"):
+        return os.path.join(sys._MEIPASS, relative)
+    if getattr(sys, "frozen", False):
+        return os.path.join(os.path.dirname(os.path.abspath(sys.executable)), relative)
+    return os.path.join(os.path.abspath(os.path.dirname(__file__)), relative)
+
+
+def _log_dir() -> str:
+    """日志落盘目录：exe 同目录，永远可写"""
+    if getattr(sys, "frozen", False):
+        d = os.path.dirname(os.path.abspath(sys.executable))
+    else:
+        d = os.path.abspath(os.path.dirname(__file__))
+    try:
+        os.makedirs(d, exist_ok=True)
+    except Exception:
+        d = tempfile.gettempdir()
+    return d
+
+
+def _log_error_to_file(msg: str) -> None:
+    try:
+        log_path = os.path.join(_log_dir(), "netease_downloader_error.log")
+        ts = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+        with open(log_path, "a", encoding="utf-8") as f:
+            f.write(f"[{ts}] {msg}\n")
+    except Exception:
+        pass
+
+
 # ============ Windows 控制台编码 & 闪退保护 ============
-def _fix_windows_console():
+_PAUSE_ON_EXIT = os.name == "nt"
+
+
+def _pause_now() -> None:
+    if not _PAUSE_ON_EXIT:
+        return
+    try:
+        if sys.stdout is None or sys.stdin is None:
+            return
+        # 打包后的 exe 双击运行时，强制暂停（不依赖 isatty 判断）
+        is_frozen = getattr(sys, "frozen", False)
+        if not is_frozen:
+            if hasattr(sys.stdout, "isatty") and not sys.stdout.isatty():
+                return
+        try:
+            import msvcrt
+            print("\n按任意键继续...", end="", flush=True)
+            msvcrt.getch()
+        except Exception:
+            try:
+                input("\n按回车键退出...")
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+
+def _atexit_handler() -> None:
+    _pause_now()
+
+
+def _excepthook(etype, value, tb) -> None:
+    try:
+        lines = traceback.format_exception(etype, value, tb)
+        text = "".join(lines)
+        sys.stderr.write(text)
+        sys.stderr.flush()
+        _log_error_to_file(text.rstrip("\n"))
+        print("\n错误日志已保存到 netease_downloader_error.log（exe 同目录）", file=sys.stderr)
+    except Exception:
+        pass
+    _pause_now()
+
+
+def _fix_windows_console() -> None:
     """解决 Windows 中文乱码 + 控制台闪退"""
     if os.name != "nt":
         return
 
-    # 1) 将控制台代码页切到 UTF-8
     try:
         import ctypes
         ctypes.windll.kernel32.SetConsoleOutputCP(65001)
@@ -42,57 +136,63 @@ def _fix_windows_console():
         except Exception:
             pass
 
-    # 2) 强制 stdout/stderr 使用 UTF-8
     for stream_name in ("stdout", "stderr"):
         stream = getattr(sys, stream_name, None)
-        if stream is not None and hasattr(stream, "reconfigure"):
+        if stream is None:
+            continue
+        try:
+            buf = getattr(stream, "buffer", None)
+            if buf is None:
+                continue
+            nw = io.TextIOWrapper(buf, encoding="utf-8", errors="replace", line_buffering=True)
+            setattr(sys, stream_name, nw)
+        except Exception:
             try:
-                stream.reconfigure(encoding="utf-8", errors="replace")
+                if hasattr(stream, "reconfigure"):
+                    stream.reconfigure(encoding="utf-8", errors="replace")
             except Exception:
-                try:
-                    import io
-                    setattr(sys, stream_name, io.TextIOWrapper(
-                        getattr(sys, "__raw__", stream.buffer) if hasattr(sys, "__raw__") else stream.buffer,
-                        encoding="utf-8", errors="replace"
-                    ))
-                except Exception:
-                    pass
+                pass
 
 
 _fix_windows_console()
+sys.excepthook = _excepthook
+atexit.register(_atexit_handler)
 
-
-import requests
-from Crypto.Cipher import AES
-from mutagen.id3 import APIC, TALB, TDRC, TIT2, TPE1
-from mutagen.mp3 import MP3
+try:
+    import requests
+    from Crypto.Cipher import AES
+    from mutagen.id3 import APIC, TALB, TDRC, TIT2, TPE1
+    from mutagen.mp3 import MP3
+except Exception as _import_err:
+    _log_error_to_file(f"[导入失败] {_import_err}\n{traceback.format_exc()}")
+    sys.stderr.write(
+        "\n[致命错误] 缺少必需的运行库：requests / pycryptodome / mutagen\n"
+        "请安装：pip install requests pycryptodome mutagen\n"
+        "错误已记录到 netease_downloader_error.log\n"
+    )
+    sys.stderr.flush()
+    _pause_now()
+    sys.exit(1)
 
 try:
     import colorama
-    # convert=True 确保在 PyInstaller --console 下也能生效
     colorama.init(wrap=True, convert=True)
     _HAS_COLORAMA = True
 except ImportError:
     _HAS_COLORAMA = False
 
-
-# ============ 资源路径（兼容 PyInstaller 打包） ============
-def resource_path(relative: str) -> str:
-    """获取资源文件路径：PyInstaller 打包后从 _MEIPASS 取，否则从源码目录取"""
-    if hasattr(sys, "_MEIPASS"):
-        return os.path.join(sys._MEIPASS, relative)
-    return os.path.join(os.path.abspath(os.path.dirname(__file__)), relative)
-
-
 def get_ffmpeg_path() -> Optional[str]:
-    """查找 ffmpeg：优先使用打包进 exe 的，其次系统 PATH"""
-    exe_name = "ffmpeg.exe" if os.name == "nt" else "ffmpeg"
-    bundled = resource_path(exe_name)
-    if os.path.exists(bundled):
-        return bundled
-    # 回退到系统 PATH
+    """查找 ffmpeg：优先打包进 exe 的 → exe 同目录 → 系统 PATH"""
     from shutil import which
-    return which("ffmpeg")
+    exe_name = "ffmpeg.exe" if os.name == "nt" else "ffmpeg"
+    for candidate in (
+        resource_path(exe_name),
+        os.path.join(os.path.dirname(os.path.abspath(sys.executable)), exe_name),
+        which("ffmpeg"),
+    ):
+        if candidate and os.path.isfile(candidate):
+            return candidate
+    return None
 
 
 # ============ 彩色输出 ============
@@ -394,10 +494,21 @@ def convert_to_mp3(src: str, dest: str, bitrate: str = "320k") -> bool:
            "-b:a", bitrate, "-map_metadata", "-1", dest]
     try:
         subprocess.run(cmd, check=True,
-                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                       stdout=subprocess.DEVNULL,
+                       stderr=subprocess.PIPE)
         return True
+    except FileNotFoundError as e:
+        print(f"  {Color.red('ffmpeg 未找到')}: {e}")
+        return False
     except subprocess.CalledProcessError as e:
-        print(f"  {Color.red('ffmpeg 转换失败')}: {e}")
+        stderr_txt = ""
+        try:
+            stderr_txt = e.stderr.decode("utf-8", errors="replace") if e.stderr else ""
+        except Exception:
+            pass
+        print(f"  {Color.red('ffmpeg 转换失败')}: 退出码 {e.returncode}")
+        if stderr_txt:
+            print(f"    {stderr_txt.strip()[-300:]}")
         return False
 
 
@@ -815,27 +926,22 @@ def main():
         return
 
 
-def _pause_on_windows():
-    """Windows 下双击运行后暂停，防止窗口闪退"""
-    if os.name == "nt" and sys.stdout.isatty():
-        try:
-            input("\n按回车键退出...")
-        except Exception:
-            pass
-
-
 if __name__ == "__main__":
+    _runtime_tmpdir()
     try:
         main()
     except KeyboardInterrupt:
         print("\n\n已中断，再见！")
     except BrokenPipeError:
         pass
+    except SystemExit:
+        pass
     except Exception as e:
-        print(f"\n[致命错误] {e}", file=sys.stderr)
-        print("详细堆栈:", file=sys.stderr)
-        traceback.print_exc()
-        _pause_on_windows()
-        sys.exit(1)
-    # 正常结束也暂停，防止双击运行后闪退
-    _pause_on_windows()
+        text = "".join(traceback.format_exception(*sys.exc_info()))
+        sys.stderr.write(f"\n[致命错误] {e}\n{text}")
+        sys.stderr.flush()
+        _log_error_to_file(text.rstrip("\n"))
+        print("\n错误日志已保存到 netease_downloader_error.log（exe 同目录）", file=sys.stderr)
+    # 显式暂停 + atexit 双保险，防止双击闪退
+    _pause_now()
+
