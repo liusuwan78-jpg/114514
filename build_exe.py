@@ -31,7 +31,11 @@ FFMPEG_URLS_WINDOWS = [
 
 
 def log(msg):
-    print(msg, flush=True)
+    try:
+        print(msg, flush=True)
+    except (UnicodeEncodeError, UnicodeDecodeError):
+        fallback = str(msg).encode("ascii", errors="replace").decode("ascii")
+        print(fallback, flush=True)
 
 
 def die(msg, code=1):
