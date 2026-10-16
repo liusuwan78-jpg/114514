@@ -62,16 +62,23 @@ echo.
 %PYTHON_CMD% --version
 echo.
 
-REM ---- 安装依赖 ----
+REM ---- 安装依赖（使用清华镜像加速） ----
 echo [2/3] 安装依赖包...
-echo 可能需要 1-2 分钟，请耐心等待...
-%PYTHON_CMD% -m pip install -r requirements.txt
+echo 正在升级 pip（旧版 pip 可能找不到新版 pyinstaller）...
+%PYTHON_CMD% -m pip install --upgrade pip -i https://pypi.tuna.tsinghua.edu.cn/simple --disable-pip-version-check >nul 2>&1
+echo 正在从清华镜像安装依赖，请耐心等待...
+%PYTHON_CMD% -m pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple --disable-pip-version-check
 if %errorlevel% neq 0 (
     echo.
-    echo [错误] 依赖安装失败，请检查网络连接
-    echo.
-    pause
-    exit /b 1
+    echo 镜像安装失败，正在尝试官方源...
+    %PYTHON_CMD% -m pip install -r requirements.txt --disable-pip-version-check
+    if %errorlevel% neq 0 (
+        echo.
+        echo [错误] 依赖安装失败，请检查网络连接
+        echo.
+        pause
+        exit /b 1
+    )
 )
 echo   依赖安装完成。
 echo.
