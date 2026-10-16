@@ -21,7 +21,46 @@ import subprocess
 import sys
 import tempfile
 import time
+import traceback
 from typing import Optional, Union
+
+
+# ============ Windows 控制台编码 & 闪退保护 ============
+def _fix_windows_console():
+    """解决 Windows 中文乱码 + 控制台闪退"""
+    if os.name != "nt":
+        return
+
+    # 1) 将控制台代码页切到 UTF-8
+    try:
+        import ctypes
+        ctypes.windll.kernel32.SetConsoleOutputCP(65001)
+        ctypes.windll.kernel32.SetConsoleCP(65001)
+    except Exception:
+        try:
+            subprocess.run("chcp 65001 >nul", shell=True)
+        except Exception:
+            pass
+
+    # 2) 强制 stdout/stderr 使用 UTF-8
+    for stream_name in ("stdout", "stderr"):
+        stream = getattr(sys, stream_name, None)
+        if stream is not None and hasattr(stream, "reconfigure"):
+            try:
+                stream.reconfigure(encoding="utf-8", errors="replace")
+            except Exception:
+                try:
+                    import io
+                    setattr(sys, stream_name, io.TextIOWrapper(
+                        getattr(sys, "__raw__", stream.buffer) if hasattr(sys, "__raw__") else stream.buffer,
+                        encoding="utf-8", errors="replace"
+                    ))
+                except Exception:
+                    pass
+
+
+_fix_windows_console()
+
 
 import requests
 from Crypto.Cipher import AES
@@ -30,7 +69,8 @@ from mutagen.mp3 import MP3
 
 try:
     import colorama
-    colorama.init()
+    # convert=True 确保在 PyInstaller --console 下也能生效
+    colorama.init(wrap=True, convert=True)
     _HAS_COLORAMA = True
 except ImportError:
     _HAS_COLORAMA = False
@@ -762,4 +802,20 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("\n\n已中断，再见！")
+    except BrokenPipeError:
+        pass
+    except Exception as e:
+        print(f"\n[致命错误] {e}", file=sys.stderr)
+        print("详细堆栈:", file=sys.stderr)
+        traceback.print_exc()
+        # Windows 下暂停，防止双击运行后闪退
+        if os.name == "nt" and sys.stdout.isatty():
+            try:
+                input("\n按回车键退出...")
+            except Exception:
+                pass
+        sys.exit(1)
