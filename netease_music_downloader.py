@@ -21,11 +21,19 @@ import subprocess
 import sys
 import tempfile
 import time
+from typing import Optional, Union
 
 import requests
 from Crypto.Cipher import AES
 from mutagen.id3 import APIC, TALB, TDRC, TIT2, TPE1
 from mutagen.mp3 import MP3
+
+try:
+    import colorama
+    colorama.init()
+    _HAS_COLORAMA = True
+except ImportError:
+    _HAS_COLORAMA = False
 
 
 # ============ 资源路径（兼容 PyInstaller 打包） ============
@@ -36,7 +44,7 @@ def resource_path(relative: str) -> str:
     return os.path.join(os.path.abspath(os.path.dirname(__file__)), relative)
 
 
-def get_ffmpeg_path() -> str | None:
+def get_ffmpeg_path() -> Optional[str]:
     """查找 ffmpeg：优先使用打包进 exe 的，其次系统 PATH"""
     exe_name = "ffmpeg.exe" if os.name == "nt" else "ffmpeg"
     bundled = resource_path(exe_name)
@@ -58,19 +66,12 @@ class Color:
     MAGENTA = "\033[95m"
     CYAN = "\033[96m"
     GRAY = "\033[90m"
-    BRIGHT_RED = "\033[31;1m"
-    BRIGHT_GREEN = "\033[32;1m"
 
     _enabled = True
 
     @classmethod
     def init(cls):
-        """在 Windows 上启用 ANSI 转义"""
-        if os.name == "nt":
-            try:
-                os.system("")  # 启用 ANSI
-            except Exception:
-                pass
+        # colorama 已在 import 时初始化，兼容 Windows 8.1
         if not sys.stdout.isatty():
             cls._enabled = False
 
@@ -78,7 +79,7 @@ class Color:
     def _wrap(cls, color, text):
         if not cls._enabled:
             return str(text)
-        return f"{color}{text}{cls.RESET}"
+        return "%s%s%s" % (color, text, cls.RESET)
 
     @classmethod
     def red(cls, t): return cls._wrap(cls.RED, t)
@@ -146,7 +147,7 @@ def save_config(cfg: dict) -> None:
         log_warn(f"保存配置失败: {e}")
 
 
-def set_cookie(cookie: str | None) -> None:
+def set_cookie(cookie: Optional[str]) -> None:
     base = "appver=2.0.2; os=pc;"
     if cookie:
         cookie = cookie.strip()
@@ -157,7 +158,7 @@ def set_cookie(cookie: str | None) -> None:
         HEADERS["Cookie"] = base
 
 
-def get_login_status() -> dict | None:
+def get_login_status() -> Optional[dict]:
     """获取当前登录账号信息，未登录返回 None"""
     try:
         result = weapi_post("/w/nuser/account/get", {})
@@ -351,7 +352,7 @@ def convert_to_mp3(src: str, dest: str, bitrate: str = "320k") -> bool:
         return False
 
 
-def set_mp3_tags(mp3_path: str, info: dict, cover_data: bytes | None) -> None:
+def set_mp3_tags(mp3_path: str, info: dict, cover_data: Optional[bytes]) -> None:
     try:
         audio = MP3(mp3_path)
         if audio.tags is None:
@@ -379,7 +380,7 @@ def set_mp3_tags(mp3_path: str, info: dict, cover_data: bytes | None) -> None:
         print(f"  {Color.yellow('写入元数据失败')}（不影响播放）: {e}")
 
 
-def download_cover(url: str) -> bytes | None:
+def download_cover(url: str) -> Optional[bytes]:
     if not url:
         return None
     try:
@@ -392,7 +393,7 @@ def download_cover(url: str) -> bytes | None:
 
 
 def download_one_song(song_id: str, output_dir: str, level: str = "exhigh",
-                      bitrate: str = "320k", detail: dict | None = None) -> str | None:
+                      bitrate: str = "320k", detail: Optional[dict] = None) -> Optional[str]:
     """下载单曲，返回最终文件路径或 None"""
     if detail is None:
         details = get_songs_detail([song_id])
@@ -488,7 +489,7 @@ def batch_download(songs: list, output_dir: str, level: str = "exhigh",
 
 
 # ============ 交互菜单 ============
-def select_from_list(items: list, label: str = "请选择") -> int | None:
+def select_from_list(items: list, label: str = "请选择") -> Optional[int]:
     for i, item in enumerate(items, 1):
         print(f"  {Color.cyan(f'[{i}]')} {item}")
     try:
@@ -517,19 +518,19 @@ def interactive_menu(args) -> None:
             log_warn("未登录（VIP/每日推荐功能不可用）")
 
         print(f"""
-  {Color.cyan('1')}. 单曲下载（ID / URL）
-  {Color.cyan('2')}. 搜索歌曲并下载
-  {Color.cyan('3')}. 歌手热门歌曲下载
-  {Color.cyan('4')}. 歌单下载（ID / URL）
+  {Color.cyan('1')}. 单曲下载
+  {Color.cyan('2')}. 搜索下载
+  {Color.cyan('3')}. 歌手热门
+  {Color.cyan('4')}. 歌单下载
   {Color.cyan('5')}. 榜单下载
-  {Color.cyan('6')}. 每日推荐下载（需登录）
-  {Color.cyan('7')}. 设置登录 Cookie
+  {Color.cyan('6')}. 每日推荐（需登录）
+  {Color.cyan('7')}. 设置登录
   {Color.cyan('0')}. 退出
 """)
-        choice = input(f"{Color.bold('请选择操作: ')}").strip()
+        choice = input(f"{Color.bold('输入编号: ')}").strip()
 
         if choice == "1":
-            sid = input("歌曲 ID 或 URL: ").strip()
+            sid = input("歌曲 ID 或链接: ").strip()
             if sid:
                 download_one_song(extract_id(sid), args.output, args.quality, args.bitrate)
                 print(f"\n{Color.green('完成')}")
@@ -540,13 +541,13 @@ def interactive_menu(args) -> None:
                 if not results:
                     log_warn("未找到相关歌曲")
                     continue
-                items = [f"{s['name']} - {s['artists']}  | 专辑: {s['album']}  | {s['fee']}"
+                items = ["%s - %s  | %s  | %s" % (s['name'], s['artists'], s['album'], s['fee'])
                          for s in results]
-                sel = select_from_list(items, "选择要下载的歌曲")
+                sel = select_from_list(items, "选择歌曲")
                 if sel is not None:
                     batch_download([results[sel]], args.output, args.quality, args.bitrate)
         elif choice == "3":
-            kw = input("歌手名称: ").strip()
+            kw = input("歌手名: ").strip()
             if kw:
                 artists = search_artists(kw)
                 if not artists:
@@ -556,16 +557,16 @@ def interactive_menu(args) -> None:
                 sel = select_from_list(items, "选择歌手")
                 if sel is not None:
                     aid = artists[sel]["id"]
-                    log_info(f"获取「{artists[sel]['name']}」的热门歌曲...")
+                    log_info("正在获取「%s」的热门歌曲..." % artists[sel]['name'])
                     hot = get_artist_hot_songs(str(aid))
-                    log_info(f"共 {len(hot)} 首")
-                    sub = input("下载前 N 首？(留空=全部): ").strip()
+                    log_info("共 %d 首" % len(hot))
+                    sub = input("下载前几首？(回车=全部): ").strip()
                     if sub.isdigit():
                         hot = hot[:int(sub)]
-                    batch_download(hot, os.path.join(args.output, f"歌手_{artists[sel]['name']}"),
+                    batch_download(hot, os.path.join(args.output, "歌手_" + artists[sel]['name']),
                                    args.quality, args.bitrate)
         elif choice == "4":
-            pid = input("歌单 ID 或 URL: ").strip()
+            pid = input("歌单 ID 或链接: ").strip()
             if pid:
                 pid = extract_id(pid)
                 log_info("获取歌单信息...")
@@ -574,51 +575,50 @@ def interactive_menu(args) -> None:
                     log_err("获取歌单失败")
                     continue
                 name = pl.get("name", "歌单")
-                # 使用 trackIds 获取全量
                 track_ids = [t["id"] for t in pl.get("trackIds", [])]
-                log_info(f"歌单「{name}」共 {len(track_ids)} 首")
-                sub = input("下载前 N 首？(留空=全部): ").strip()
+                log_info("歌单「%s」共 %d 首" % (name, len(track_ids)))
+                sub = input("下载前几首？(回车=全部): ").strip()
                 if sub.isdigit():
                     track_ids = track_ids[:int(sub)]
                 songs = [{"id": tid} for tid in track_ids]
-                batch_download(songs, os.path.join(args.output, f"歌单_{name}"),
+                batch_download(songs, os.path.join(args.output, "歌单_" + name),
                                args.quality, args.bitrate)
         elif choice == "5":
             toplist = get_toplist()
-            items = [f"{t['name']}  ({t['updateFrequency']})" for t in toplist]
+            items = ["%s  (%s)" % (t['name'], t['updateFrequency']) for t in toplist]
             sel = select_from_list(items, "选择榜单")
             if sel is not None:
                 tid = str(toplist[sel]["id"])
-                log_info(f"获取榜单「{toplist[sel]['name']}」...")
+                log_info("获取榜单「%s」..." % toplist[sel]['name'])
                 pl = get_playlist_detail(tid)
                 track_ids = [t["id"] for t in pl.get("trackIds", [])]
                 songs = [{"id": tid2} for tid2 in track_ids]
-                batch_download(songs, os.path.join(args.output, f"榜单_{toplist[sel]['name']}"),
+                batch_download(songs, os.path.join(args.output, "榜单_" + toplist[sel]['name']),
                                args.quality, args.bitrate)
         elif choice == "6":
             if not profile:
-                log_err("请先在菜单 7 设置登录 Cookie")
+                log_err("请先在第 7 项设置登录")
                 continue
             log_info("获取每日推荐...")
             daily = get_daily_recommend_songs()
             if not daily:
                 log_warn("未获取到每日推荐")
                 continue
-            log_info(f"共 {len(daily)} 首推荐歌曲")
+            log_info("共 %d 首推荐歌曲" % len(daily))
             batch_download(daily, os.path.join(args.output, "每日推荐"),
                            args.quality, args.bitrate)
         elif choice == "7":
-            ck = input("粘贴你的登录 Cookie（MUSIC_U=...）: ").strip()
+            ck = input("粘贴 Cookie（MUSIC_U=...）: ").strip()
             if ck:
                 cfg["cookie"] = ck
                 save_config(cfg)
                 set_cookie(ck)
-                log_ok("Cookie 已保存")
+                log_ok("已保存登录信息")
         elif choice == "0":
             log_info("再见！")
             break
         else:
-            log_warn("无效选择")
+            log_warn("无效编号")
 
 
 # ============ CLI 入口 ============

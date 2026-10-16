@@ -87,6 +87,11 @@ def main():
         print(f"[错误] 找不到 {script}")
         sys.exit(1)
 
+    # Windows 8.1 兼容性提示
+    if sys.version_info >= (3, 12):
+        print("[提示] 当前 Python 版本为 %d.%d，Windows 8.1 建议使用 Python 3.9 ~ 3.11"
+              % (sys.version_info.major, sys.version_info.minor))
+
     print("=" * 56)
     print("  网易云音乐下载器 - 单文件打包 (含 ffmpeg)")
     print("=" * 56)
@@ -125,6 +130,7 @@ def main():
         "--hidden-import", "Crypto.Cipher.AES",
         "--hidden-import", "mutagen.id3",
         "--hidden-import", "mutagen.mp3",
+        "--hidden-import", "colorama",
         script,
     ]
     print(f"  命令: {' '.join(cmd)}\n")
