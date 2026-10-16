@@ -27,6 +27,26 @@ from Crypto.Cipher import AES
 from mutagen.id3 import APIC, TALB, TDRC, TIT2, TPE1
 from mutagen.mp3 import MP3
 
+
+# ============ 资源路径（兼容 PyInstaller 打包） ============
+def resource_path(relative: str) -> str:
+    """获取资源文件路径：PyInstaller 打包后从 _MEIPASS 取，否则从源码目录取"""
+    if hasattr(sys, "_MEIPASS"):
+        return os.path.join(sys._MEIPASS, relative)
+    return os.path.join(os.path.abspath(os.path.dirname(__file__)), relative)
+
+
+def get_ffmpeg_path() -> str | None:
+    """查找 ffmpeg：优先使用打包进 exe 的，其次系统 PATH"""
+    exe_name = "ffmpeg.exe" if os.name == "nt" else "ffmpeg"
+    bundled = resource_path(exe_name)
+    if os.path.exists(bundled):
+        return bundled
+    # 回退到系统 PATH
+    from shutil import which
+    return which("ffmpeg")
+
+
 # ============ 彩色输出 ============
 class Color:
     RESET = "\033[0m"
@@ -316,15 +336,16 @@ def download_file(url: str, dest: str) -> bool:
 
 
 def convert_to_mp3(src: str, dest: str, bitrate: str = "320k") -> bool:
-    cmd = ["ffmpeg", "-y", "-i", src, "-c:a", "libmp3lame",
+    ffmpeg = get_ffmpeg_path()
+    if not ffmpeg:
+        log_err("未找到 ffmpeg，请先安装 ffmpeg 并加入系统 PATH")
+        return False
+    cmd = [ffmpeg, "-y", "-i", src, "-c:a", "libmp3lame",
            "-b:a", bitrate, "-map_metadata", "-1", dest]
     try:
         subprocess.run(cmd, check=True,
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         return True
-    except FileNotFoundError:
-        log_err("未找到 ffmpeg，请先安装 ffmpeg 并加入系统 PATH")
-        return False
     except subprocess.CalledProcessError as e:
         print(f"  {Color.red('ffmpeg 转换失败')}: {e}")
         return False
