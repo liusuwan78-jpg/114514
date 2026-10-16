@@ -156,8 +156,17 @@ MODULUS = (
 )
 IV = b"0102030405060708"
 
+# ============ 便携路径（U盘使用） ============
+def app_dir() -> str:
+    """获取程序所在目录：打包后取 exe 目录，否则取脚本目录"""
+    if getattr(sys, "frozen", False):
+        return os.path.dirname(os.path.abspath(sys.executable))
+    return os.path.dirname(os.path.abspath(__file__))
+
+
 BASE_URL = "https://music.163.com"
-CONFIG_FILE = os.path.join(os.path.expanduser("~"), ".netease_downloader.json")
+# 配置文件放在 exe 同目录，方便 U 盘携带
+CONFIG_FILE = os.path.join(app_dir(), ".netease_downloader.json")
 
 HEADERS = {
     "User-Agent": (
@@ -679,7 +688,8 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument("song", nargs="?", help="歌曲 ID 或 URL")
-    parser.add_argument("-o", "--output", default="downloads", help="输出目录（默认 downloads）")
+    parser.add_argument("-o", "--output", default=None,
+                        help="输出目录（默认：exe 同目录下的 音乐 文件夹）")
     parser.add_argument("-q", "--quality", default="exhigh",
                         choices=["standard", "higher", "exhigh", "lossless", "hires"],
                         help="音质等级（默认 exhigh）")
@@ -694,6 +704,10 @@ def main():
     parser.add_argument("--search-limit", type=int, default=10, help="搜索结果数量")
     parser.add_argument("--limit", type=int, default=0, help="下载前 N 首（0=全部）")
     args = parser.parse_args()
+
+    # 默认输出目录：exe 同目录下的"音乐"文件夹，方便 U 盘携带
+    if not args.output:
+        args.output = os.path.join(app_dir(), "音乐")
 
     # Cookie 优先级：CLI > 环境变量 > 配置文件
     cfg = load_config()
@@ -801,6 +815,15 @@ def main():
         return
 
 
+def _pause_on_windows():
+    """Windows 下双击运行后暂停，防止窗口闪退"""
+    if os.name == "nt" and sys.stdout.isatty():
+        try:
+            input("\n按回车键退出...")
+        except Exception:
+            pass
+
+
 if __name__ == "__main__":
     try:
         main()
@@ -812,10 +835,7 @@ if __name__ == "__main__":
         print(f"\n[致命错误] {e}", file=sys.stderr)
         print("详细堆栈:", file=sys.stderr)
         traceback.print_exc()
-        # Windows 下暂停，防止双击运行后闪退
-        if os.name == "nt" and sys.stdout.isatty():
-            try:
-                input("\n按回车键退出...")
-            except Exception:
-                pass
+        _pause_on_windows()
         sys.exit(1)
+    # 正常结束也暂停，防止双击运行后闪退
+    _pause_on_windows()

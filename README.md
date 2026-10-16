@@ -17,8 +17,18 @@
 
 ## 环境要求
 
-- Python 3.8 ~ 3.11（Windows 8.1 请用 3.9 ~ 3.11）
-- 可选：ffmpeg（不装也能用，打包时会自动内置）
+- 打包用：Python 3.8 ~ 3.11
+  - **Python 3.8** → 兼容 Windows 7 ~ 11（推荐，覆盖最全）
+  - Python 3.9 ~ 3.11 → 兼容 Windows 8.1 ~ 11
+- 运行用：无需安装 Python，打包后的 exe 可直接运行
+- 可选：ffmpeg（打包时会自动下载内置）
+
+## 便携特性
+
+- ✅ **单文件 exe**：自带 Python 运行时 + 全部依赖 + ffmpeg
+- ✅ **U盘便携**：配置文件和下载的音乐默认保存在 exe 同目录，拷入 U 盘即可在任意电脑使用
+- ✅ **防闪退**：双击运行后自动暂停，不会一闪而过
+- ✅ **中文不乱码**：自动设置 UTF-8 编码，兼容 Win7~Win11 控制台
 
 ## 快速使用
 
@@ -66,7 +76,7 @@ python build_exe.py
 | 参数 | 说明 |
 |------|------|
 | `song_id` | 歌曲 ID（位置参数） |
-| `-o, --output` | 输出目录（默认 `./音乐`） |
+| `-o, --output` | 输出目录（默认：exe 同目录下的"音乐"文件夹） |
 | `-q, --quality` | 音质：standard / higher / exhigh / lossless / hires |
 | `--bitrate` | MP3 码率（默认 320） |
 | `--cookie` | 登录 Cookie（MUSIC_U=xxx） |

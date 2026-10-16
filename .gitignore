@@ -10,6 +10,10 @@ build/
 # ffmpeg binary (downloaded during build)
 ffmpeg
 ffmpeg.exe
+ffmpeg.zip
+
+# 配置文件（随 exe 生成，不提交）
+.netease_downloader.json
 
 # 下载的音乐
 音乐/
