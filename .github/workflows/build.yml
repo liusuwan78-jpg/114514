@@ -12,7 +12,6 @@ jobs:
     env:
       PYTHONIOENCODING: utf-8
       PYTHONUTF8: "1"
-      SKIP_PIP_INSTALL: "1"
 
     steps:
       - name: 检出代码
@@ -23,16 +22,16 @@ jobs:
         with:
           python-version: "3.8"
 
-      # 直接装 PyInstaller 5.x（Win7 兼容）和其他依赖
-      - name: 安装依赖 + PyInstaller 5.x
+      # 装依赖 + PyInstaller 5.x（Win7 兼容）
+      - name: 安装依赖
         run: |
           python -m pip install --upgrade pip -i https://pypi.tuna.tsinghua.edu.cn/simple
           python -m pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple --upgrade
           python -m pip install "pyinstaller>=5.0,<6.0" -i https://pypi.tuna.tsinghua.edu.cn/simple --force-reinstall
-          python -m pip show pyinstaller
           python --version
+          python -m pip show pyinstaller | Select-String "Version"
 
-      # Actions 机房直连 GitHub Release 快，下载 ffmpeg 放到项目根目录
+      # Actions 机房直连 GitHub Release 很快（~225MB/s），下载 ffmpeg 放项目根目录
       - name: 下载 ffmpeg
         run: |
           $ProgressPreference = 'SilentlyContinue'
@@ -45,8 +44,28 @@ jobs:
           Write-Host "ffmpeg.exe ready:"
           Get-Item .\ffmpeg.exe | Select-Object Name, Length
 
+      # 直接跑 PyInstaller，绕过 build_exe.py 的复杂逻辑
       - name: PyInstaller 打包
-        run: python build_exe.py
+        run: |
+          python -m PyInstaller `
+            --onefile `
+            --console `
+            --clean `
+            --noconfirm `
+            --name netease_music_downloader `
+            --add-binary "ffmpeg.exe;." `
+            --hidden-import Crypto.Cipher.AES `
+            --hidden-import Crypto.Util.Padding `
+            --hidden-import Crypto.Util.strxor `
+            --hidden-import Crypto.Random `
+            --hidden-import mutagen `
+            --hidden-import mutagen.id3 `
+            --hidden-import mutagen.mp3 `
+            netease_music_downloader.py
+
+      - name: 检查产物
+        run: |
+          Get-Item .\dist\netease_music_downloader.exe | Select-Object Name, Length, LastWriteTime
 
       - name: 上传 EXE 为 Artifact
         uses: actions/upload-artifact@v4
