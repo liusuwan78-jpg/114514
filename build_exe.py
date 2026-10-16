@@ -185,15 +185,24 @@ def main():
         "--name", "netease_music_downloader",
         "--add-binary", "%s%s." % (ffmpeg, sep),
         "--hidden-import", "Crypto.Cipher.AES",
+        "--hidden-import", "Crypto.Util.Padding",
+        "--hidden-import", "Crypto.Util.strxor",
+        "--hidden-import", "Crypto.Random",
         "--hidden-import", "mutagen.id3",
         "--hidden-import", "mutagen.mp3",
+        "--hidden-import", "mutagen",
         "--hidden-import", "colorama",
         "--hidden-import", "charset_normalizer",
+        "--hidden-import", "idna",
+        "--hidden-import", "urllib3",
+        "--hidden-import", "requests",
         "--collect-all", "colorama",
+        "--collect-all", "Crypto",
         script,
     ]
     env = os.environ.copy()
     env["PYTHONIOENCODING"] = "utf-8"
+    env["PYTHONUTF8"] = "1"
     log("  命令: " + " ".join(cmd))
     result = subprocess.run(cmd, env=env)
 
