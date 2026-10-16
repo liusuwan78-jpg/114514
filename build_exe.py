@@ -18,9 +18,11 @@ import urllib.request
 from typing import Optional
 
 
-FFMPEG_URL_WINDOWS = (
-    "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
-)
+# ffmpeg 下载源（按优先级）：华为云镜像（国内直连）→ gyan.dev 官方源
+FFMPEG_URLS_WINDOWS = [
+    "https://repo.huaweicloud.com/ffmpeg/releases/ffmpeg-release-essentials.zip",
+    "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip",
+]
 
 
 def log(msg):
@@ -49,26 +51,89 @@ def clean_all():
 
 
 # ============ ffmpeg 准备 ============
-def download_file(url, dest):
-    log("  下载: %s" % url)
+def _download_with_progress(url, dest):
+    """带进度显示的下载，返回 True=完整、False=损坏或失败"""
     try:
-        urllib.request.urlretrieve(url, dest)
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            total = resp.headers.get("Content-Length")
+            total = int(total) if total else None
+            downloaded = 0
+            with open(dest, "wb") as out:
+                while True:
+                    chunk = resp.read(64 * 1024)
+                    if not chunk:
+                        break
+                    out.write(chunk)
+                    downloaded += len(chunk)
+                    if total:
+                        pct = downloaded * 100 // total
+                        mb_done = downloaded / 1024 / 1024
+                        mb_total = total / 1024 / 1024
+                        sys.stderr.write(
+                            "\r  下载进度: %d%%  (%.1f / %.1f MB)  " % (pct, mb_done, mb_total)
+                        )
+                    else:
+                        sys.stderr.write("\r  已下载: %.1f MB  " % (downloaded / 1024 / 1024))
+                    sys.stderr.flush()
+            sys.stderr.write("\n")
         return True
     except Exception as e:
         log("  下载失败: %s" % e)
         return False
 
 
+def _is_valid_zip(path):
+    """验证 zip 文件完整性，坏包（用户强退残留）直接判 False"""
+    try:
+        with zipfile.ZipFile(path) as z:
+            # testzip 会逐个 CRC 校验，任意文件损坏返回第一个坏文件
+            return z.testzip() is None
+    except zipfile.BadZipFile:
+        return False
+    except Exception:
+        return False
+
+
+def _cleanup_bad_zip(zip_path):
+    if os.path.exists(zip_path):
+        try:
+            os.remove(zip_path)
+            log("  已清理损坏的旧 zip 残留")
+        except Exception:
+            pass
+
+
 def get_ffmpeg_windows():
     # type: () -> Optional[str]
     dest = "ffmpeg.exe"
     if os.path.exists(dest):
-        log("  已存在 ffmpeg.exe，跳过下载")
-        return dest
+        # 顺便校验一下是不是真的 ffmpeg.exe（防止 0 字节空文件残留）
+        if os.path.getsize(dest) > 1_000_000:
+            log("  已存在 ffmpeg.exe (%.1f MB)，跳过下载" % (os.path.getsize(dest) / 1024 / 1024))
+            return dest
+        else:
+            log("  现有 ffmpeg.exe 太小，判定为损坏，重新下载")
+            os.remove(dest)
 
     zip_path = "ffmpeg.zip"
-    log("[准备] 下载 Windows 版 ffmpeg...")
-    if not download_file(FFMPEG_URL_WINDOWS, zip_path):
+    _cleanup_bad_zip(zip_path)
+
+    log("[准备] 下载 Windows 版 ffmpeg（约 130 MB）...")
+
+    downloaded = False
+    for url in FFMPEG_URLS_WINDOWS:
+        log("  尝试: %s" % url)
+        if _download_with_progress(url, zip_path):
+            if _is_valid_zip(zip_path):
+                downloaded = True
+                break
+            else:
+                log("  下载完成但 zip 损坏，清理后尝试下一个源...")
+                _cleanup_bad_zip(zip_path)
+
+    if not downloaded:
+        log("  所有镜像均下载失败")
         return None
 
     log("[准备] 解压 ffmpeg...")
@@ -80,8 +145,11 @@ def get_ffmpeg_windows():
                     ffmpeg_member = name
                     break
             if not ffmpeg_member:
-                log("  压缩包中未找到 ffmpeg.exe")
+                log("  压缩包中未找到 ffmpeg.exe，可用内容:")
+                for n in z.namelist()[:20]:
+                    log("    %s" % n)
                 return None
+            log("  正在提取 %s ..." % ffmpeg_member)
             with z.open(ffmpeg_member) as src, open(dest, "wb") as out:
                 shutil.copyfileobj(src, out)
         os.remove(zip_path)
@@ -89,6 +157,8 @@ def get_ffmpeg_windows():
         return dest
     except Exception as e:
         log("  解压失败: %s" % e)
+        # 失败时清掉残留 zip，下次从头下
+        _cleanup_bad_zip(zip_path)
         return None
 
 
@@ -112,7 +182,6 @@ def check_python_version():
     major, minor = sys.version_info.major, sys.version_info.minor
     log("[环境] Python %d.%d.%d" % (major, minor, sys.version_info.micro))
     if os.name == "nt":
-        # Windows 7 只支持到 Python 3.8
         if major == 3 and minor <= 8:
             log("[环境] ✅ 兼容 Windows 7 ~ 11")
         elif major == 3 and minor <= 11:
@@ -135,8 +204,14 @@ def main():
 
     check_python_version()
 
-    # 1. 彻底清理
+    # 1. 彻底清理（包含上次可能残留的坏 ffmpeg.zip）
     clean_all()
+    for junk in ("ffmpeg.zip", "ffmpeg.exe", "ffmpeg"):
+        if os.path.exists(junk):
+            try:
+                os.remove(junk)
+            except Exception:
+                pass
 
     # 2. ffmpeg
     log("\n[1/3] 准备 ffmpeg...")
@@ -148,7 +223,7 @@ def main():
         ffmpeg_name = "ffmpeg"
 
     if not ffmpeg or not os.path.exists(ffmpeg):
-        die("ffmpeg 准备失败")
+        die("ffmpeg 准备失败（请检查网络，或手动把 ffmpeg.exe 放到当前目录后重跑）")
 
     # 3. 确保 PyInstaller 已安装（Win7 兼容用 5.x）
     try:
@@ -156,12 +231,13 @@ def main():
         pi_ver = PyInstaller.__version__
         log("[依赖] 已安装 PyInstaller %s" % pi_ver)
         if os.name == "nt" and sys.version_info <= (3, 8):
-            # Win7 需要 PyInstaller 5.x
             major_pi = int(pi_ver.split(".")[0])
             if major_pi >= 6:
                 log("[依赖] Win7 兼容需要 PyInstaller 5.x，正在降级...")
                 subprocess.run(
-                    [sys.executable, "-m", "pip", "install", "pyinstaller>=5.0,<6.0"],
+                    [sys.executable, "-m", "pip", "install",
+                     "pyinstaller>=5.0,<6.0", "-i", "https://pypi.tuna.tsinghua.edu.cn/simple",
+                     "--disable-pip-version-check"],
                 )
     except ImportError:
         log("[依赖] 安装 PyInstaller...")
@@ -169,7 +245,11 @@ def main():
             pkg = "pyinstaller>=5.0,<6.0"
         else:
             pkg = "pyinstaller>=5.0"
-        r = subprocess.run([sys.executable, "-m", "pip", "install", pkg])
+        r = subprocess.run(
+            [sys.executable, "-m", "pip", "install", pkg,
+             "-i", "https://pypi.tuna.tsinghua.edu.cn/simple",
+             "--disable-pip-version-check"],
+        )
         if r.returncode != 0:
             die("PyInstaller 安装失败")
 
