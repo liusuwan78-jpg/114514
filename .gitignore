@@ -1,16 +1,10 @@
 # Python
 __pycache__/
 *.py[cod]
-*.pyo
 *.egg-info/
 dist/
 build/
 *.spec
-
-# ffmpeg binary (downloaded during build)
-ffmpeg
-ffmpeg.exe
-ffmpeg.zip
 
 # 配置文件（随 exe 生成，不提交）
 .netease_downloader.json
@@ -20,7 +14,6 @@ ffmpeg.zip
 music/
 downloads/
 *.mp3
-*.m4a
 *.flac
 
 # 系统

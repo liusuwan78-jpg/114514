@@ -1,96 +1,55 @@
 # 网易云音乐下载器
 
-一个命令行网易云音乐下载工具，支持单曲、搜索、歌手、歌单、榜单、每日推荐下载，自动转码 MP3 并写入封面和元数据。
+一个命令行网易云音乐下载工具，**纯 Python 实现，不依赖 ffmpeg**。直接下载网易云原生 MP3（最高 320kbps），并写入封面与元数据。
 
-## 功能
+## 特点
 
-- 🎵 单曲下载（按歌曲 ID）
-- 🔍 搜索下载（关键词搜索，编号选择）
-- 👤 歌手热门歌曲下载
-- 📋 歌单全量下载
-- 📊 网易云官方榜单下载
-- 📅 每日推荐下载（需登录）
-- 🎧 自动转码 MP3 320kbps
-- 🖼️ 自动写入封面、标题、歌手、专辑元数据
-- 🎨 彩色终端界面，编号菜单选择
-- 📦 可打包为单文件 exe，自带 ffmpeg，零依赖
+- 🎵 单曲 / 搜索 / 歌手 / 歌单 / 榜单 / 每日推荐
+- 🚫 **无需 ffmpeg**：直接下原生 MP3，exe 体积小、启动快、不会有下载转码工具的坑
+- 🖼️ 用 mutagen 写入封面、标题、歌手、专辑、年份
+- 🎨 彩色终端 + 编号菜单
+- 📦 单文件 exe，U 盘便携（配置与下载目录跟随 exe）
 
-## 环境要求
+## 直接使用（推荐）
 
-- 打包用：Python 3.8 ~ 3.11
-  - **Python 3.8** → 兼容 Windows 7 ~ 11（推荐，覆盖最全）
-  - Python 3.9 ~ 3.11 → 兼容 Windows 8.1 ~ 11
-- 运行用：无需安装 Python，打包后的 exe 可直接运行
-- 可选：ffmpeg（打包时会自动下载内置）
+去 [Releases](https://github.com/liusuwan78-jpg/114514/releases) 下载 `netease_downloader.exe`，双击打开即可（无参数会进入交互菜单）。
 
-## 便携特性
-
-- ✅ **单文件 exe**：自带 Python 运行时 + 全部依赖 + ffmpeg
-- ✅ **U盘便携**：配置文件和下载的音乐默认保存在 exe 同目录，拷入 U 盘即可在任意电脑使用
-- ✅ **防闪退**：双击运行后自动暂停，不会一闪而过
-- ✅ **中文不乱码**：自动设置 UTF-8 编码，兼容 Win7~Win11 控制台
-
-## 快速使用
+## 从源码运行
 
 ```bash
-# 安装依赖
 pip install -r requirements.txt
-
-# 单曲下载
-python netease_music_downloader.py 259138 -o ./音乐
-
-# 搜索下载
-python netease_music_downloader.py --search 青花瓷
-
-# 歌手热门
-python netease_music_downloader.py --artist 周杰伦
-
-# 歌单下载
-python netease_music_downloader.py --playlist 3778678
-
-# 榜单下载
-python netease_music_downloader.py --toplist
-
-# 每日推荐（需登录）
-python netease_music_downloader.py --daily --cookie "MUSIC_U=你的cookie"
+python netease_downloader.py            # 交互菜单
+python netease_downloader.py 259138     # 单曲
+python netease_downloader.py --search 青花瓷
+python netease_downloader.py --artist 周杰伦
+python netease_downloader.py --playlist 3778678
+python netease_downloader.py --toplist
+python netease_downloader.py --daily --cookie "MUSIC_U=xxx"
 ```
 
-无参数运行进入交互菜单：
-
-```
-python netease_music_downloader.py
-```
-
-## 打包为 exe（Windows）
-
-双击 `build_exe.bat`，或手动执行：
-
-```bash
-python build_exe.py
-```
-
-自动下载 ffmpeg 并打包为单文件 `dist/netease_music_downloader.exe`（约 125MB），无需安装 Python 或 ffmpeg 即可使用。
-
-## 参数说明
+## 参数
 
 | 参数 | 说明 |
 |------|------|
-| `song_id` | 歌曲 ID（位置参数） |
-| `-o, --output` | 输出目录（默认：exe 同目录下的"音乐"文件夹） |
-| `-q, --quality` | 音质：standard / higher / exhigh / lossless / hires |
-| `--bitrate` | MP3 码率（默认 320） |
+| `song_id` | 歌曲 ID |
+| `-o, --output` | 输出目录（默认 exe 同目录的"音乐"文件夹） |
+| `-q, --quality` | 音质：standard(128k) / higher(192k) / exhigh(320k) |
 | `--cookie` | 登录 Cookie（MUSIC_U=xxx） |
 | `--search` | 搜索关键词 |
 | `--artist` | 歌手名 |
-| `--playlist` | 歌单 ID 或 URL |
-| `--toplist` | 下载官方榜单 |
-| `--daily` | 下载每日推荐（需登录） |
-| `--limit` | 搜索/歌手结果数量限制 |
+| `--playlist` | 歌单 ID 或链接 |
+| `--toplist` | 官方榜单 |
+| `--daily` | 每日推荐（需登录） |
+| `--limit` | 搜索/歌手结果数量 |
 
-## 登录说明
+## 登录
 
-部分歌曲（VIP/灰色）需要登录才能下载。在网易云网页版登录后，从浏览器 Cookie 中复制 `MUSIC_U` 的值，通过 `--cookie` 传入即可。
+VIP / 灰色歌曲需要登录。在网易云网页版登录后，从浏览器 Cookie 复制 `MUSIC_U` 的值，用 `--cookie` 传入，或在交互菜单的"设置"里填入。
+
+## 打包（自动）
+
+推送到 `main` 会触发 GitHub Actions，在 Windows 机器上自动打包并把 `netease_downloader.exe` 发布到 Release。
 
 ## 免责声明
 
-本工具仅供学习交流使用，请尊重版权，下载的音乐请勿用于商业用途。
+本工具仅供学习交流，请尊重版权，下载的音乐请勿用于商业用途。
