@@ -18,9 +18,14 @@ import urllib.request
 from typing import Optional
 
 
-# ffmpeg 下载源（按优先级）：华为云镜像（国内直连）→ gyan.dev 官方源
+# ffmpeg 下载源（按优先级）：国内代理加速 GitHub Release → gyan.dev 官方源兜底
+# 结构不同但 zip 内部都有 bin/ffmpeg.exe，解压时统一按 endswith("bin/ffmpeg.exe") 匹配
 FFMPEG_URLS_WINDOWS = [
-    "https://repo.huaweicloud.com/ffmpeg/releases/ffmpeg-release-essentials.zip",
+    # mirror.ghproxy.com 代理 GitHub BtbN/FFmpeg-Builds（国内 CDN 加速，约 30MB）
+    "https://mirror.ghproxy.com/https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip",
+    # ghfast.top 代理 GitHub BtbN（备用）
+    "https://ghfast.top/https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip",
+    # gyan.dev 官方源（约 110MB，国内直连较慢）
     "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip",
 ]
 
@@ -51,11 +56,11 @@ def clean_all():
 
 
 # ============ ffmpeg 准备 ============
-def _download_with_progress(url, dest):
+def _download_with_progress(url, dest, timeout=60):
     """带进度显示的下载，返回 True=完整、False=损坏或失败"""
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-        with urllib.request.urlopen(req, timeout=30) as resp:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
             total = resp.headers.get("Content-Length")
             total = int(total) if total else None
             downloaded = 0
@@ -107,33 +112,53 @@ def _cleanup_bad_zip(zip_path):
 def get_ffmpeg_windows():
     # type: () -> Optional[str]
     dest = "ffmpeg.exe"
-    if os.path.exists(dest):
-        # 顺便校验一下是不是真的 ffmpeg.exe（防止 0 字节空文件残留）
-        if os.path.getsize(dest) > 1_000_000:
-            log("  已存在 ffmpeg.exe (%.1f MB)，跳过下载" % (os.path.getsize(dest) / 1024 / 1024))
-            return dest
-        else:
-            log("  现有 ffmpeg.exe 太小，判定为损坏，重新下载")
-            os.remove(dest)
+
+    # ---- 最高优先级：本地已有 ffmpeg.exe（用户手动放 / 上次下载好的） ----
+    if os.path.exists(dest) and os.path.getsize(dest) > 1_000_000:
+        log("  ✅ 检测到本地 ffmpeg.exe (%.1f MB)，跳过下载" % (os.path.getsize(dest) / 1024 / 1024))
+        return dest
+    elif os.path.exists(dest):
+        log("  本地 ffmpeg.exe 异常小 (%d 字节)，判定为损坏，重新下载" % os.path.getsize(dest))
+        os.remove(dest)
 
     zip_path = "ffmpeg.zip"
     _cleanup_bad_zip(zip_path)
 
-    log("[准备] 下载 Windows 版 ffmpeg（约 130 MB）...")
+    log("[准备] 下载 Windows 版 ffmpeg...")
 
     downloaded = False
-    for url in FFMPEG_URLS_WINDOWS:
-        log("  尝试: %s" % url)
-        if _download_with_progress(url, zip_path):
-            if _is_valid_zip(zip_path):
-                downloaded = True
-                break
+    for i, url in enumerate(FFMPEG_URLS_WINDOWS):
+        label = ["ghproxy 代理 GitHub", "ghfast 代理 GitHub", "gyan.dev 官方源"][i] if i < 3 else "源 %d" % (i + 1)
+        log("  [%d/%d] 尝试 %s: %s" % (i + 1, len(FFMPEG_URLS_WINDOWS), label, url))
+        # 每个源最多重试 3 次，每次 60 秒超时
+        ok = False
+        for attempt in range(3):
+            if attempt > 0:
+                log("  第 %d 次重试..." % (attempt + 1))
+            if _download_with_progress(url, zip_path, timeout=60):
+                if _is_valid_zip(zip_path):
+                    ok = True
+                    break
+                else:
+                    log("  下载完成但 zip 校验失败（%s），清理后重试..." % (
+                        "CRC 错误" if os.path.exists(zip_path) else "文件为空"))
+                    _cleanup_bad_zip(zip_path)
             else:
-                log("  下载完成但 zip 损坏，清理后尝试下一个源...")
                 _cleanup_bad_zip(zip_path)
+        if ok:
+            downloaded = True
+            break
+        log("  此源下载失败，尝试下一个...")
 
     if not downloaded:
-        log("  所有镜像均下载失败")
+        log("\n  ❌ 所有自动下载源均失败")
+        log("\n  👉 请手动下载 ffmpeg.exe，放到当前目录后重跑脚本")
+        log("\n  推荐下载地址（国内可直连）：")
+        log("    ① https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip")
+        log("       解压后进入 bin 文件夹，复制 ffmpeg.exe 到本目录")
+        log("    ② 或从 3DM / 新浪爱问共享资料 等搜 ffmpeg")
+        log("       下载 ffmpeg 9.x essentials 解压，取 bin/ffmpeg.exe")
+        log("\n  放好后目录里应该看到 ffmpeg.exe (约 80 MB)")
         return None
 
     log("[准备] 解压 ffmpeg...")
@@ -148,16 +173,16 @@ def get_ffmpeg_windows():
                 log("  压缩包中未找到 ffmpeg.exe，可用内容:")
                 for n in z.namelist()[:20]:
                     log("    %s" % n)
+                _cleanup_bad_zip(zip_path)
                 return None
             log("  正在提取 %s ..." % ffmpeg_member)
             with z.open(ffmpeg_member) as src, open(dest, "wb") as out:
                 shutil.copyfileobj(src, out)
         os.remove(zip_path)
-        log("  ffmpeg.exe 就绪 (%.1f MB)" % (os.path.getsize(dest) / 1024 / 1024))
+        log("  ✅ ffmpeg.exe 就绪 (%.1f MB)" % (os.path.getsize(dest) / 1024 / 1024))
         return dest
     except Exception as e:
         log("  解压失败: %s" % e)
-        # 失败时清掉残留 zip，下次从头下
         _cleanup_bad_zip(zip_path)
         return None
 
@@ -223,7 +248,7 @@ def main():
         ffmpeg_name = "ffmpeg"
 
     if not ffmpeg or not os.path.exists(ffmpeg):
-        die("ffmpeg 准备失败（请检查网络，或手动把 ffmpeg.exe 放到当前目录后重跑）")
+        die("ffmpeg 准备失败，请查看上方的手动下载指引")
 
     # 3. 确保 PyInstaller 已安装（Win7 兼容用 5.x）
     try:
