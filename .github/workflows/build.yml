@@ -95,7 +95,7 @@ jobs:
           data = open("selftest.mp3", "rb").read()
           assert data[:3] == b"ID3"
           size = ((data[6] & 0x7F) << 21) | ((data[7] & 0x7F) << 14) | ((data[8] & 0x7F) << 7) | (data[9] & 0x7F)
-          print("ID3 OK tag=%d file=%d rsa=%d" % (size, len(data), len(n._rsa_encrypt("abc")))
+          print("ID3 OK tag=%d file=%d rsa=%d" % (size, len(data), len(n._rsa_encrypt("abc"))))
           '@ | Set-Content -Encoding UTF8 selftest.py
           & C:\Python34\python.exe selftest.py
           if ($LASTEXITCODE -ne 0) { throw "Python 3.4 自测失败" }
