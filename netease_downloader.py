@@ -34,6 +34,7 @@ APP_VERSION = "3.0.0"
 # ==================== Windows 控制台（XP 兼容） ====================
 _CONSOLE_INPUT_CP936 = False
 _OLD_CONSOLE_CP = None
+_OLD_STDIN = None
 
 
 class _WinConsoleWriter(object):
@@ -99,7 +100,7 @@ class _WinConsoleWriter(object):
 
 def _init_console():
     """XP 中文控制台输入用 GBK；输出用 WriteConsoleW，不依赖代码页"""
-    global _CONSOLE_INPUT_CP936, _OLD_CONSOLE_CP
+    global _CONSOLE_INPUT_CP936, _OLD_CONSOLE_CP, _OLD_STDIN
     if os.name != "nt":
         return
     try:
@@ -121,6 +122,8 @@ def _init_console():
     if _CONSOLE_INPUT_CP936 and sys.stdin is not None and hasattr(sys.stdin, "buffer"):
         try:
             import io
+            # 保留旧对象引用，防止被 GC 后关闭底层 buffer
+            _OLD_STDIN = sys.stdin
             sys.stdin = io.TextIOWrapper(sys.stdin.buffer, encoding="gbk",
                                          errors="replace")
         except Exception:
