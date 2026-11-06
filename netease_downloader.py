@@ -13,6 +13,7 @@
 
 import argparse
 import base64
+import binascii
 import datetime
 import json
 import os
@@ -258,7 +259,8 @@ def _aes_encrypt(text, key):
 
 def _rsa_encrypt(text):
     text = text[::-1]
-    rs = pow(int(text.encode("utf-8").hex(), 16), int(PUB_KEY, 16),
+    hex_str = binascii.hexlify(text.encode("utf-8")).decode("ascii")
+    rs = pow(int(hex_str, 16), int(PUB_KEY, 16),
              int(MODULUS, 16))
     return format(rs, "x").zfill(256)
 
