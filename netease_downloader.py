@@ -302,8 +302,11 @@ def safe_filename(name):
 
 def build_filename(title, artists):
     if artists:
-        return safe_filename("%s - %s" % (title, artists))
-    return safe_filename(title)
+        name = safe_filename("%s - %s" % (title, artists))
+    else:
+        name = safe_filename(title)
+    # XP 的完整路径限制 260 字符，文件名过长会直接保存失败
+    return name[:110]
 
 
 def join_artists(song):

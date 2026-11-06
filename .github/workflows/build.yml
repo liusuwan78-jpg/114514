@@ -84,6 +84,22 @@ jobs:
           & .\dist\netease_downloader.exe --version
           if ($LASTEXITCODE -ne 0) { throw "exe 启动失败" }
 
+      - name: Python 3.4 兼容性自测（ID3 / 加密）
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          @'
+          import netease_downloader as n
+          open("selftest.mp3", "wb").write(b"ID3\x03\x00\x00\x00\x00\x00\x00" + b"FAKE" * 2000)
+          n.write_tags("selftest.mp3", {"name": "Test", "ar": [{"name": "Artist"}], "al": {"name": "Album"}}, b"\x89PNG" + b"X" * 100)
+          data = open("selftest.mp3", "rb").read()
+          assert data[:3] == b"ID3"
+          size = ((data[6] & 0x7F) << 21) | ((data[7] & 0x7F) << 14) | ((data[8] & 0x7F) << 7) | (data[9] & 0x7F)
+          print("ID3 OK tag=%d file=%d rsa=%d" % (size, len(data), len(n._rsa_encrypt("abc")))
+          '@ | Set-Content -Encoding UTF8 selftest.py
+          & C:\Python34\python.exe selftest.py
+          if ($LASTEXITCODE -ne 0) { throw "Python 3.4 自测失败" }
+
       - name: 联网实测（搜索 + 下载）
         shell: pwsh
         run: |
