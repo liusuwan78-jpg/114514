@@ -1,4 +1,4 @@
-name: Build Windows EXE
+name: Build Windows XP EXE
 
 on:
   push:
@@ -20,39 +20,70 @@ jobs:
       - name: 检出代码
         uses: actions/checkout@v4
 
-      - name: 安装 Python 3.8
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.8"
+      # XP 上能运行的最后一代 Python 3 是 3.4.4，且必须是 32 位
+      - name: 安装 Python 3.4.4（32 位）
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          Invoke-WebRequest -Uri "https://www.python.org/ftp/python/3.4.4/python-3.4.4.msi" -OutFile "$env:RUNNER_TEMP\python344.msi" -UseBasicParsing
+          Start-Process msiexec.exe -ArgumentList "/i", "$env:RUNNER_TEMP\python344.msi", "/qn", "ALLUSERS=1", "TARGETDIR=C:\Python34", "/norestart" -Wait
+          if (-not (Test-Path "C:\Python34\python.exe")) { throw "Python 3.4.4 安装失败" }
+          & C:\Python34\python.exe -V
+          if (-not (Test-Path "C:\Python34\Scripts\pip.exe")) {
+            & C:\Python34\python.exe -m ensurepip
+          }
 
       - name: 安装依赖
+        shell: pwsh
         run: |
-          python -m pip install --upgrade pip -i https://pypi.tuna.tsinghua.edu.cn/simple
-          python -m pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
-          python -m pip install "pyinstaller>=5.0,<6.0" -i https://pypi.tuna.tsinghua.edu.cn/simple
-          python -m pip show pyinstaller | Select-String "Version"
+          $ErrorActionPreference = "Stop"
+          Invoke-WebRequest -Uri "https://bootstrap.pypa.io/pip/3.4/get-pip.py" -OutFile "get-pip.py" -UseBasicParsing
+          & C:\Python34\python.exe get-pip.py
+          & C:\Python34\python.exe -m pip install --no-cache-dir "setuptools==40.8.0" "wheel==0.33.6"
+          & C:\Python34\python.exe -m pip install --no-cache-dir -r requirements.txt
+          & C:\Python34\python.exe -m pip install --no-cache-dir "altgraph==0.16.1" "pefile==2018.8.8" "pywin32-ctypes==0.1.2" "pyinstaller==3.4"
+
+      - name: 下载最新 HTTPS 根证书
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          Invoke-WebRequest -Uri "https://curl.se/ca/cacert.pem" -OutFile "cacert.pem" -UseBasicParsing
 
       - name: PyInstaller 打包
+        shell: pwsh
         run: |
-          python -m PyInstaller `
+          $ErrorActionPreference = "Stop"
+          & C:\Python34\python.exe -m PyInstaller `
             --onefile `
             --console `
             --clean `
             --noconfirm `
             --name netease_downloader `
+            --add-data "cacert.pem;." `
             --hidden-import Crypto.Cipher.AES `
-            --hidden-import Crypto.Util.Padding `
-            --hidden-import mutagen.id3 `
-            --hidden-import mutagen.mp3 `
+            --hidden-import Crypto.Cipher._raw_aes `
+            --hidden-import Crypto.Cipher._raw_aesni `
+            --hidden-import Crypto.Util._raw_api `
             netease_downloader.py
 
       - name: 检查产物
-        run: Get-Item .\dist\netease_downloader.exe | Select-Object Name, Length
+        shell: pwsh
+        run: |
+          Get-Item .\dist\netease_downloader.exe | Select-Object Name, Length
+          & .\dist\netease_downloader.exe --version
+
+      - name: 联网实测（搜索 + 下载 + 写标签）
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          & .\dist\netease_downloader.exe 1330348068 -o .\ci_music
+          if (-not (Test-Path .\ci_music\*.mp3)) { throw "exe 下载测试失败" }
+          Get-ChildItem .\ci_music | Select-Object Name, Length
 
       - name: 上传 EXE
         uses: actions/upload-artifact@v4
         with:
-          name: netease_downloader-win-x64
+          name: netease_downloader-win-xp
           path: dist/netease_downloader.exe
           if-no-files-found: error
           retention-days: 30
@@ -61,19 +92,21 @@ jobs:
         if: startsWith(github.ref, 'refs/heads/main')
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v2.0.0
-          name: 网易云音乐下载器 v2.0.0
+          tag_name: v3.0.0
+          name: 网易云音乐下载器 v3.0.0（XP 兼容版）
           body: |
-            ## 全新重写版（纯 Python，无需 ffmpeg）
+            ## Windows XP 兼容版
 
-            - 直接下载网易云原生 MP3（最高 320kbps），不再依赖 ffmpeg
-            - exe 体积从 125MB 降到约 15MB，双击即用，秒起
-            - 用 mutagen 写入封面与标题/歌手/专辑元数据
+            - **32 位单文件 exe**，Windows XP SP3 / Win7 / Win8 / Win10 / Win11 均可直接运行
+            - 使用 Python 3.4.4（XP 支持的最后一代 Python 3）
+            - 纯 Python，无需安装 Python、无需 ffmpeg
+            - 直接下载网易云原生 MP3（最高 320kbps），手工写入标题 / 歌手 / 专辑 / 封面
             - 支持：单曲 / 搜索 / 歌手 / 歌单 / 榜单 / 每日推荐
-            - U 盘便携：配置与下载目录跟随 exe
+            - 配置与下载目录跟随 exe，U 盘便携
 
             ## 使用
-            直接下载下方的 `netease_downloader.exe`，双击打开即可（无参数进入菜单）。
+            下载下方的 `netease_downloader.exe`，双击打开，按菜单操作即可。
+            若杀毒软件误报，添加信任即可（PyInstaller 打包程序的常见误报）。
           files: dist/netease_downloader.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
