@@ -62,10 +62,6 @@ jobs:
             "--onefile", "--console", "--clean", "--noconfirm",
             "--name", "netease_downloader",
             "--add-data", "cacert.pem;.",
-            "--hidden-import", "Crypto.Cipher.AES",
-            "--hidden-import", "Crypto.Cipher._raw_aes",
-            "--hidden-import", "Crypto.Cipher._raw_aesni",
-            "--hidden-import", "Crypto.Util._raw_api",
             "netease_downloader.py"
           )
           # XP 上没有 msvcr100.dll，必须随 exe 一起打包
