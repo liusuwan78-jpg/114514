@@ -39,9 +39,14 @@ jobs:
           $ErrorActionPreference = "Stop"
           Invoke-WebRequest -Uri "https://bootstrap.pypa.io/pip/3.4/get-pip.py" -OutFile "get-pip.py" -UseBasicParsing
           & C:\Python34\python.exe get-pip.py
+          if ($LASTEXITCODE -ne 0) { throw "get-pip 失败" }
           & C:\Python34\python.exe -m pip install --no-cache-dir "setuptools==40.8.0" "wheel==0.33.6"
+          if ($LASTEXITCODE -ne 0) { throw "setuptools 安装失败" }
           & C:\Python34\python.exe -m pip install --no-cache-dir -r requirements.txt
+          if ($LASTEXITCODE -ne 0) { throw "requirements 安装失败" }
           & C:\Python34\python.exe -m pip install --no-cache-dir "altgraph==0.16.1" "pefile==2018.8.8" "pywin32-ctypes==0.1.2" "pyinstaller==3.4"
+          if ($LASTEXITCODE -ne 0) { throw "PyInstaller 安装失败" }
+          & C:\Python34\python.exe -c "import requests, Crypto.Cipher.AES, PyInstaller; print(requests.__version__, Crypto.__version__, PyInstaller.__version__)"
 
       - name: 下载最新 HTTPS 根证书
         shell: pwsh
@@ -65,18 +70,22 @@ jobs:
             --hidden-import Crypto.Cipher._raw_aesni `
             --hidden-import Crypto.Util._raw_api `
             netease_downloader.py
+          if ($LASTEXITCODE -ne 0) { throw "PyInstaller 打包失败" }
+          if (-not (Test-Path ".\dist\netease_downloader.exe")) { throw "未生成 exe" }
 
       - name: 检查产物
         shell: pwsh
         run: |
           Get-Item .\dist\netease_downloader.exe | Select-Object Name, Length
           & .\dist\netease_downloader.exe --version
+          if ($LASTEXITCODE -ne 0) { throw "exe 启动失败" }
 
       - name: 联网实测（搜索 + 下载 + 写标签）
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
           & .\dist\netease_downloader.exe 1330348068 -o .\ci_music
+          if ($LASTEXITCODE -ne 0) { throw "exe 下载测试失败" }
           if (-not (Test-Path .\ci_music\*.mp3)) { throw "exe 下载测试失败" }
           Get-ChildItem .\ci_music | Select-Object Name, Length
 

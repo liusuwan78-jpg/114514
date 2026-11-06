@@ -1,4 +1,4 @@
-# Python 3.4 / Windows XP 兼容版本锁定
+# Pinned for Python 3.4 / Windows XP compatibility (ASCII only)
 requests==2.19.1
 urllib3==1.23
 idna==2.7
