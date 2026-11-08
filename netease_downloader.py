@@ -28,7 +28,7 @@ import traceback
 import requests
 from Crypto.Cipher import AES
 
-APP_VERSION = "3.0.0"
+APP_VERSION = "3.1.0"
 
 
 # ==================== Windows 控制台（XP 兼容） ====================
@@ -411,6 +411,39 @@ def get_login_status():
         return None
 
 
+# ==================== 歌词 ====================
+def get_lyric(song_id):
+    """获取 LRC 歌词文本，无歌词或失败返回空串"""
+    try:
+        d = weapi_post("/song/lyric", {"id": song_id, "lv": -1, "kv": -1,
+                                       "tv": -1, "rv": -1, "os": "pc"})
+        return (d.get("lrc") or {}).get("lyric") or ""
+    except Exception:
+        return ""
+
+
+def save_lyric(lrc_path, text):
+    """保存为 UTF-8 带 BOM 的 .lrc（千千静听 / 网易云等播放器都能识别）"""
+    if not text or not text.strip():
+        return False
+    try:
+        with open(lrc_path, "wb") as f:
+            f.write(b"\xef\xbb\xbf")
+            f.write(text.replace("\r\n", "\n").encode("utf-8"))
+        return True
+    except Exception:
+        return False
+
+
+def save_lyric_for(song_id, audio_path):
+    """为已下载的音频保存同名 .lrc，已有歌词则跳过"""
+    lrc_path = os.path.splitext(audio_path)[0] + ".lrc"
+    if os.path.exists(lrc_path) and os.path.getsize(lrc_path) > 10:
+        return
+    if save_lyric(lrc_path, get_lyric(song_id)):
+        log_ok("歌词: %s" % os.path.basename(lrc_path))
+
+
 # ==================== ID3v2.3（不依赖 mutagen） ====================
 def _synchsafe(n):
     return bytes(bytearray([(n >> 21) & 0x7F, (n >> 14) & 0x7F,
@@ -581,6 +614,7 @@ def download_one(song_id, output_dir, level="exhigh", detail=None):
                               "%s.%s" % (build_filename(name, artists), ext))
     if os.path.exists(final_path) and os.path.getsize(final_path) > 1024:
         log_info("已存在，跳过: %s" % os.path.basename(final_path))
+        save_lyric_for(song_id, final_path)
         return final_path
 
     br = (info.get("br") or 0) // 1000
@@ -596,6 +630,7 @@ def download_one(song_id, output_dir, level="exhigh", detail=None):
 
     if ext == "mp3":
         write_tags(final_path, detail, download_cover(cover_url))
+    save_lyric_for(song_id, final_path)
     return final_path
 
 
