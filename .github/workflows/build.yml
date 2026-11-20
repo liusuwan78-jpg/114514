@@ -3,6 +3,9 @@ name: Build Windows XP EXE
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - "kugou/**"
+      - ".github/workflows/kugou-build.yml"
   workflow_dispatch:
 
 permissions:

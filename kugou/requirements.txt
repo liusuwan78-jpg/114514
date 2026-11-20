@@ -1,0 +1,6 @@
+# Python 3.4 compatible pins (Windows XP SP3)
+requests==2.19.1
+urllib3==1.23
+idna==2.7
+chardet==3.0.4
+certifi==2020.12.5
