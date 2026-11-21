@@ -28,7 +28,7 @@ import traceback
 import requests
 from Crypto.Cipher import AES
 
-APP_VERSION = "3.1.0"
+APP_VERSION = "4.0.0"
 
 
 # ==================== Windows 控制台（XP 兼容） ====================
@@ -573,7 +573,8 @@ def download_cover(url, size="500y500"):
     return None
 
 
-def download_one(song_id, output_dir, level="exhigh", detail=None):
+def download_one(song_id, output_dir, level="exhigh", detail=None,
+                 with_lyric=True):
     if detail is None:
         details = get_songs_detail([song_id])
         if not details:
@@ -614,7 +615,8 @@ def download_one(song_id, output_dir, level="exhigh", detail=None):
                               "%s.%s" % (build_filename(name, artists), ext))
     if os.path.exists(final_path) and os.path.getsize(final_path) > 1024:
         log_info("已存在，跳过: %s" % os.path.basename(final_path))
-        save_lyric_for(song_id, final_path)
+        if with_lyric:
+            save_lyric_for(song_id, final_path)
         return final_path
 
     br = (info.get("br") or 0) // 1000
@@ -630,7 +632,8 @@ def download_one(song_id, output_dir, level="exhigh", detail=None):
 
     if ext == "mp3":
         write_tags(final_path, detail, download_cover(cover_url))
-    save_lyric_for(song_id, final_path)
+    if with_lyric:
+        save_lyric_for(song_id, final_path)
     return final_path
 
 
